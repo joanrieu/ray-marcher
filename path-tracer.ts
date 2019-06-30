@@ -22,10 +22,8 @@ namespace PathTracer {
 
   type Camera = {
     position: Vec3;
-    lookAt: Vec3;
+    look_at: Vec3;
     up: Vec3;
-    fov: number;
-    aspectRatio: number;
   };
 
   type Vec2 = [number, number];
@@ -52,7 +50,7 @@ namespace PathTracer {
 
   type Intersection = {
     distance: number;
-    isClose: boolean;
+    is_close: boolean;
     mesh: Mesh;
   };
 
@@ -79,14 +77,12 @@ namespace PathTracer {
 
   const camera: Camera = {
     position: [0, 0, 5],
-    lookAt: [0, 0, 0],
-    up: [0, 1, 0],
-    fov: 90,
-    aspectRatio: 3 / 2
+    look_at: [0, 0, 0],
+    up: [0, 1, 0]
   };
 
   const screen: Screen = {
-    size: [30, 20]
+    size: [300, 200]
   };
 
   render();
@@ -101,7 +97,7 @@ namespace PathTracer {
 
     for (let y = 0; y < canvas.height; ++y) {
       for (let x = 0; x < canvas.width; ++x) {
-        const ray = pixel2ray([x, y], camera);
+        const ray = pixel2ray([x, y], screen, camera);
         const color = trace_ray(ray, scene);
 
         image.data[y * 4 * canvas.width + x * 4 + 0] = color[0];
@@ -130,8 +126,8 @@ namespace PathTracer {
         .map(mesh => find_intersection_once(point, mesh))
         .reduce((a, b) => (a.distance < b.distance ? a : b));
       point = add(point, scale(intersection.distance, ray.direction));
-    } while (!intersection.isClose && ++steps < 100);
-    if (intersection.isClose) return intersection;
+    } while (!intersection.is_close && ++steps < 100);
+    if (intersection.is_close) return intersection;
   }
 
   function path2color(path: Path, scene: Scene) {
@@ -142,10 +138,10 @@ namespace PathTracer {
 
   function find_intersection_once(point: Vec3, mesh: Mesh): Intersection {
     const distance = mesh_distance(point, mesh);
-    const isClose = distance < 0.1;
+    const is_close = distance < 0.1;
     return {
       distance,
-      isClose,
+      is_close,
       mesh
     };
   }
@@ -196,15 +192,25 @@ namespace PathTracer {
     return [s * a, s * b, s * c];
   }
 
-  function pixel2ray(pixel: Vec2, camera: Camera): Ray {
-    const origin: Vec3 = [
-      camera.position[0] + pixel[0] / 10,
-      camera.position[1] - pixel[1] / 10,
-      camera.position[2]
-    ];
+  function pixel2ray(pixel: Vec2, screen: Screen, camera: Camera): Ray {
+    const uv: Vec2 = [pixel[0] / screen.size[0], pixel[1] / screen.size[1]];
+    const aspect_ratio = screen.size[0] / screen.size[1];
+    const forward = normalize(subtract(camera.look_at, camera.position));
+    const up = camera.up;
+    const right = cross_product(forward, up);
+    const direction = normalize(
+      add(
+        forward,
+        add(scale((uv[0] - 0.5) * aspect_ratio, right), scale(0.5 - uv[1], up))
+      )
+    );
     return {
-      origin,
-      direction: normalize(subtract(camera.lookAt, camera.position))
+      origin: camera.position,
+      direction
     };
+  }
+
+  function cross_product([a, b, c]: Vec3, [d, e, f]: Vec3): Vec3 {
+    return [b * f - c * e, c * d - a * f, a * e - b * d];
   }
 }
