@@ -31,6 +31,7 @@ namespace RayMarcher {
   type Ray = {
     origin: Vec3;
     direction: Vec3;
+    head: Vec3;
   };
 
   type Screen = {
@@ -45,8 +46,8 @@ namespace RayMarcher {
 
   type Projection = {
     distance: number;
-    is_close: boolean;
     mesh: Mesh;
+    normal: Vec3;
   };
 
   type Mesh<T extends Geometry = Geometry> = {
@@ -87,7 +88,7 @@ namespace RayMarcher {
   };
 
   const screen: Screen = {
-    size: [300, 200]
+    size: [800, 600]
   };
 
   render();
@@ -116,46 +117,53 @@ namespace RayMarcher {
   }
 
   function march_ray(ray: Ray, scene: Scene) {
-    let point = ray.origin;
     let steps = 0;
     let projection: Projection;
+    let is_close = false;
     do {
       projection = scene.meshes
-        .map(mesh => project_point(point, mesh))
+        .map(mesh => project_point(ray.head, mesh))
         .reduce((a, b) => (a.distance < b.distance ? a : b));
-      point = add(point, scale(projection.distance, ray.direction));
-    } while (!projection.is_close && ++steps < 100);
-    return projection.is_close
-      ? projection.mesh.material.color
-      : scene.ambient_color;
+      ray.head = add(ray.head, scale(projection.distance, ray.direction));
+      is_close = projection.distance < 0.1;
+    } while (!is_close && ++steps < 100);
+    return is_close ? shade(ray, projection) : scene.ambient_color;
+  }
+
+  function shade(ray: Ray, projection: Projection) {
+    const light = -dot_product(ray.direction, projection.normal);
+    return scale(light, projection.mesh.material.color);
   }
 
   function project_point(point: Vec3, mesh: Mesh): Projection {
-    const distance = mesh_distance(point, mesh);
-    const is_close = distance < 0.1;
+    return { sphere: project_point_on_sphere, plane: project_point_on_plane }[
+      mesh.geometry.type
+    ](point, mesh as any);
+  }
+
+  function project_point_on_sphere(
+    point: Vec3,
+    mesh: Mesh<Sphere>
+  ): Projection {
+    const sphere = mesh.geometry;
+    const vector = subtract(point, sphere.center);
+    const distance = norm(vector) - sphere.radius;
     return {
       distance,
-      is_close,
-      mesh
+      mesh,
+      normal: normalize(vector)
     };
   }
 
-  function mesh_distance(point: Vec3, mesh: Mesh) {
-    switch (mesh.geometry.type) {
-      case "sphere":
-        return sphere_distance(point, mesh.geometry);
-      case "plane":
-        return plane_distance(point, mesh.geometry);
-    }
-  }
-
-  function sphere_distance(point: Vec3, sphere: Sphere) {
-    return norm(subtract(sphere.center, point)) - sphere.radius;
-  }
-
-  function plane_distance(point: Vec3, plane: Plane) {
+  function project_point_on_plane(point: Vec3, mesh: Mesh<Plane>): Projection {
+    const plane = mesh.geometry;
     const diagonal = subtract(point, plane.point);
-    return dot_product(diagonal, plane.normal);
+    const distance = dot_product(diagonal, plane.normal);
+    return {
+      distance,
+      mesh,
+      normal: plane.normal
+    };
   }
 
   function dot_product([a, b, c]: Vec3, [d, e, f]: Vec3) {
@@ -200,7 +208,8 @@ namespace RayMarcher {
     );
     return {
       origin: camera.position,
-      direction
+      direction,
+      head: camera.position
     };
   }
 
