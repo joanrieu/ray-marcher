@@ -70,6 +70,16 @@ namespace PathTracer {
         material: {
           color: [255, 0, 0]
         }
+      },
+      {
+        geometry: {
+          type: "plane",
+          point: [0.4, 0, -5],
+          normal: normalize([-1, 0, 1])
+        },
+        material: {
+          color: [0, 0, 255]
+        }
       }
     ],
     ambient_color: [50, 50, 50]
