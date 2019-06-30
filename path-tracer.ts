@@ -1,7 +1,7 @@
 namespace PathTracer {
   type Scene = {
     meshes: Mesh[];
-    ambientColor: Color;
+    ambient_color: Color;
   };
 
   type Geometry = Sphere | Plane;
@@ -72,7 +72,7 @@ namespace PathTracer {
         }
       }
     ],
-    ambientColor: [255, 0, 255]
+    ambient_color: [50, 50, 50]
   };
 
   const camera: Camera = {
@@ -103,7 +103,7 @@ namespace PathTracer {
         image.data[y * 4 * canvas.width + x * 4 + 0] = color[0];
         image.data[y * 4 * canvas.width + x * 4 + 1] = color[1];
         image.data[y * 4 * canvas.width + x * 4 + 2] = color[2];
-        image.data[y * 4 * canvas.width + x * 4 + 3] = color[3];
+        image.data[y * 4 * canvas.width + x * 4 + 3] = 255;
       }
     }
 
@@ -132,8 +132,8 @@ namespace PathTracer {
 
   function path2color(path: Path, scene: Scene) {
     return path.intersection
-      ? [...path.intersection.mesh.material.color, 255]
-      : scene.ambientColor;
+      ? path.intersection.mesh.material.color
+      : scene.ambient_color;
   }
 
   function find_intersection_once(point: Vec3, mesh: Mesh): Intersection {
