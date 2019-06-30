@@ -1,4 +1,4 @@
-namespace PathTracer {
+namespace RayMarcher {
   type Scene = {
     meshes: Mesh[];
     ambient_color: Color;
@@ -43,12 +43,7 @@ namespace PathTracer {
 
   type Color = [number, number, number];
 
-  type Path = {
-    ray: Ray;
-    intersection?: Intersection;
-  };
-
-  type Intersection = {
+  type Projection = {
     distance: number;
     is_close: boolean;
     mesh: Mesh;
@@ -108,7 +103,7 @@ namespace PathTracer {
     for (let y = 0; y < canvas.height; ++y) {
       for (let x = 0; x < canvas.width; ++x) {
         const ray = pixel2ray([x, y], screen, camera);
-        const color = trace_ray(ray, scene);
+        const color = march_ray(ray, scene);
 
         image.data[y * 4 * canvas.width + x * 4 + 0] = color[0];
         image.data[y * 4 * canvas.width + x * 4 + 1] = color[1];
@@ -120,33 +115,22 @@ namespace PathTracer {
     ctx.putImageData(image, 0, 0);
   }
 
-  function trace_ray(ray: Ray, scene: Scene) {
-    const intersection = find_intersection(ray, scene);
-    const path = { ray, intersection };
-    const color = path2color(path, scene);
-    return color;
-  }
-
-  function find_intersection(ray: Ray, scene: Scene) {
+  function march_ray(ray: Ray, scene: Scene) {
     let point = ray.origin;
     let steps = 0;
-    let intersection: Intersection;
+    let projection: Projection;
     do {
-      intersection = scene.meshes
-        .map(mesh => find_intersection_once(point, mesh))
+      projection = scene.meshes
+        .map(mesh => project_point(point, mesh))
         .reduce((a, b) => (a.distance < b.distance ? a : b));
-      point = add(point, scale(intersection.distance, ray.direction));
-    } while (!intersection.is_close && ++steps < 100);
-    if (intersection.is_close) return intersection;
-  }
-
-  function path2color(path: Path, scene: Scene) {
-    return path.intersection
-      ? path.intersection.mesh.material.color
+      point = add(point, scale(projection.distance, ray.direction));
+    } while (!projection.is_close && ++steps < 100);
+    return projection.is_close
+      ? projection.mesh.material.color
       : scene.ambient_color;
   }
 
-  function find_intersection_once(point: Vec3, mesh: Mesh): Intersection {
+  function project_point(point: Vec3, mesh: Mesh): Projection {
     const distance = mesh_distance(point, mesh);
     const is_close = distance < 0.1;
     return {
