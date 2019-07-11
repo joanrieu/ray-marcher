@@ -4,18 +4,27 @@ namespace RayMarcher {
     ambient_color: Color;
   };
 
-  type Geometry = Sphere | Plane;
+  type Mesh = Sphere | Plane | MergedMesh;
 
   type Sphere = {
     type: "sphere";
     center: Vec3;
     radius: number;
+    material: Material;
   };
 
   type Plane = {
     type: "plane";
     point: Vec3;
     normal: Vec3;
+    material: Material;
+  };
+
+  type MergedMesh = {
+    type: "merged_mesh";
+    smoothing: number;
+    meshes: Mesh[];
+    material: Material;
   };
 
   type Vec3 = [number, number, number];
@@ -50,31 +59,47 @@ namespace RayMarcher {
     normal: Vec3;
   };
 
-  type Mesh<T extends Geometry = Geometry> = {
-    material: Material;
-    geometry: T;
-  };
-
   const scene: Scene = {
     meshes: [
       {
-        geometry: {
-          type: "sphere",
-          center: [0, 0, -5],
-          radius: 1
-        },
+        type: "sphere",
+        center: [0, 0, -5],
+        radius: 1,
         material: {
           color: [255, 0, 0]
         }
       },
       {
-        geometry: {
-          type: "plane",
-          point: [0.4, 0, -5],
-          normal: normalize([-1, 0, 1])
-        },
+        type: "plane",
+        point: [0.4, 0, -5],
+        normal: normalize([-1, 0, 1]),
         material: {
           color: [0, 0, 255]
+        }
+      },
+      {
+        type: "merged_mesh",
+        smoothing: 0.5,
+        meshes: [
+          {
+            type: "sphere",
+            center: [-1.6, 1.5, -2],
+            radius: 0.5,
+            material: {
+              color: [255, 0, 255]
+            }
+          },
+          {
+            type: "sphere",
+            center: [-3, 1, -2],
+            radius: 1,
+            material: {
+              color: [255, 255, 255]
+            }
+          }
+        ],
+        material: {
+          color: [0, 255, 0]
         }
       }
     ],
@@ -125,7 +150,7 @@ namespace RayMarcher {
         .map(mesh => project_point(ray.head, mesh))
         .reduce((a, b) => (a.distance < b.distance ? a : b));
       ray.head = add(ray.head, scale(projection.distance, ray.direction));
-      is_close = projection.distance < 0.1;
+      is_close = projection.distance < 0.01;
     } while (!is_close && ++steps < 100);
     return is_close ? shade(ray, projection) : scene.ambient_color;
   }
@@ -136,33 +161,50 @@ namespace RayMarcher {
   }
 
   function project_point(point: Vec3, mesh: Mesh): Projection {
-    return { sphere: project_point_on_sphere, plane: project_point_on_plane }[
-      mesh.geometry.type
-    ](point, mesh as any);
+    return {
+      sphere: project_point_on_sphere,
+      plane: project_point_on_plane,
+      merged_mesh: project_point_on_merged_mesh
+    }[mesh.type](point, mesh as any);
   }
 
-  function project_point_on_sphere(
-    point: Vec3,
-    mesh: Mesh<Sphere>
-  ): Projection {
-    const sphere = mesh.geometry;
+  function project_point_on_sphere(point: Vec3, sphere: Sphere): Projection {
     const vector = subtract(point, sphere.center);
     const distance = norm(vector) - sphere.radius;
     return {
       distance,
-      mesh,
+      mesh: sphere,
       normal: normalize(vector)
     };
   }
 
-  function project_point_on_plane(point: Vec3, mesh: Mesh<Plane>): Projection {
-    const plane = mesh.geometry;
+  function project_point_on_plane(point: Vec3, plane: Plane): Projection {
     const diagonal = subtract(point, plane.point);
     const distance = dot_product(diagonal, plane.normal);
     return {
       distance,
-      mesh,
+      mesh: plane,
       normal: plane.normal
+    };
+  }
+
+  function project_point_on_merged_mesh(
+    point: Vec3,
+    merged_mesh: MergedMesh
+  ): Projection {
+    const projections = merged_mesh.meshes.map(mesh =>
+      project_point(point, mesh)
+    );
+    const distances = projections.map(p => p.distance);
+    const real_distance = Math.min(...distances);
+    const distance =
+      real_distance -
+      Math.max(0, merged_mesh.smoothing - Math.max(...distances)) ** 2;
+    const normal = normalize(add(projections[0].normal, projections[1].normal));
+    return {
+      distance,
+      mesh: merged_mesh,
+      normal
     };
   }
 
